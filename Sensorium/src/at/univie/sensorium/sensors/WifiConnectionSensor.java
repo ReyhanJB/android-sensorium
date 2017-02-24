@@ -7,7 +7,11 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteOrder;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.net.ConnectivityManager;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
@@ -43,6 +47,22 @@ public class WifiConnectionSensor extends AbstractSensor {
 		speed = new SensorValue(SensorValue.UNIT.MBPS,SensorValue.TYPE.SPEED);
 		//sConnectedAP = new SensorValue(SensorValue.UNIT.STRING, SensorValue.TYPE.WIFI_CONNECTION);
 	}
+	
+	final BroadcastReceiver wifiStateChange = new BroadcastReceiver() {
+		@Override
+		public void onReceive(Context context, Intent intent) {
+			int type = intent.getIntExtra(ConnectivityManager.EXTRA_NETWORK_TYPE, -1);
+			boolean disconnection = intent.getBooleanExtra(ConnectivityManager.EXTRA_NO_CONNECTIVITY, false);
+			if(type == ConnectivityManager.TYPE_WIFI){
+				if(!disconnection){
+					handler.postDelayed(scanTask, 0);
+				}
+				if(disconnection){
+					handler.removeCallbacks(scanTask);
+				}
+			}
+		}
+	};
 	
 	private Runnable scanTask = new Runnable() {
 		@Override
@@ -88,6 +108,9 @@ public class WifiConnectionSensor extends AbstractSensor {
 	@Override
 	protected void _enable() {
 		handler.postDelayed(scanTask, 0);
+		IntentFilter filterState = new IntentFilter();
+		filterState.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
+		getContext().getApplicationContext().registerReceiver(wifiStateChange, filterState);
 	}
 
 	@Override

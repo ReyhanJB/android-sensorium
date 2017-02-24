@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.net.ConnectivityManager;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
@@ -40,6 +41,23 @@ public class WifiSensor extends AbstractSensor {
 		scannedDevices = new LinkedList<WifiDevice>();
 	}
 	
+	final BroadcastReceiver wifiStateChange = new BroadcastReceiver() {
+		@Override
+		public void onReceive(Context context, Intent intent) {
+			int type = intent.getIntExtra(ConnectivityManager.EXTRA_NETWORK_TYPE, -1);
+			boolean disconnection = intent.getBooleanExtra(ConnectivityManager.EXTRA_NO_CONNECTIVITY, false);
+			if(type == ConnectivityManager.TYPE_WIFI){
+				if(!disconnection){
+					handler.postDelayed(scanTask, 0);
+				}
+				if(disconnection){
+					handler.removeCallbacks(scanTask);
+				}
+			}
+		}
+	};
+
+	
 	private Runnable scanTask = new Runnable() {
 		@Override
 		public void run() {
@@ -56,6 +74,9 @@ public class WifiSensor extends AbstractSensor {
 	@Override
 	protected void _enable() {
 		mainWifi =  (WifiManager) getContext().getSystemService(Context.WIFI_SERVICE);
+		IntentFilter filterState = new IntentFilter();
+		filterState.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
+		getContext().getApplicationContext().registerReceiver(wifiStateChange, filterState);
 		
 		wifiReceiver = new BroadcastReceiver() {
 			public void onReceive(Context context, Intent intent) {

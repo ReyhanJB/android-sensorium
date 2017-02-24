@@ -42,8 +42,6 @@ import at.univie.sensorium.SensorRegistry;
 public class GPSLocationSensor extends AbstractSensor {
 
 	private LocationManager locationManager;
-	private LocationListener locationListener;
-	private GpsStatus.Listener gpsStatusListener;
 
 	private SensorValue longitude;
 	private SensorValue latitude;
@@ -75,79 +73,81 @@ public class GPSLocationSensor extends AbstractSensor {
 		address = new SensorValue(SensorValue.UNIT.STRING, SensorValue.TYPE.ADDRESS);
 	}
 
+	private LocationListener locationListener = new LocationListener() {
+		public void onLocationChanged(Location loc) {
+			
+			longitude.setValue(loc.getLongitude());
+			latitude.setValue(loc.getLatitude());
+			altitude.setValue(loc.getAltitude());
+			accuracy.setValue(loc.getAccuracy());
+			bearing.setValue(loc.getBearing());
+			speed.setValue(loc.getSpeed());
+			timeMillis = loc.getTime();
+			
+			Geocoder myLocation = new Geocoder(getContext().getApplicationContext(), Locale.getDefault());
+			List<Address> list = null;
+			try {
+				list = myLocation.getFromLocation(loc.getLatitude(), loc.getLongitude(), 1);
+				if (list != null && list.size() > 0) {
+					Address location = list.get(0);
+					String addressText = String.format("%s, %s, %s",
+							location.getMaxAddressLineIndex() > 0 ? location.getAddressLine(0) : "",
+									location.getLocality(), // location.getAdminArea(), 
+									location.getCountryName());
+					address.setValue(addressText);
+				}
+				else
+					address.setValue("n/a");
+			} catch (IOException e) {
+				StringWriter sw = new StringWriter();
+				PrintWriter pw = new PrintWriter(sw);
+				e.printStackTrace(pw);
+				Log.d(SensorRegistry.TAG, sw.toString());
+			}
+
+			notifyListeners();
+		}
+
+		public void onStatusChanged(String provider, int status,
+				Bundle extras) {
+		}
+
+		public void onProviderEnabled(String provider) {
+			_enable();
+			Log.d("LocationSensor", provider
+					+ " enabled, listening for updates.");
+		}
+
+		public void onProviderDisabled(String provider) {
+			_disable();
+			Log.d("LocationSensor", provider
+					+ " disabled, no more updates.");
+		}
+	};
+	
+	private GpsStatus.Listener gpsStatusListener = new Listener() {
+		
+		@Override
+		public void onGpsStatusChanged(int event) {
+			if (event == GpsStatus.GPS_EVENT_SATELLITE_STATUS){
+				GpsStatus gpsstatus = locationManager.getGpsStatus(null);
+				Iterable<GpsSatellite> gpsit = gpsstatus.getSatellites();
+				int numsat = 0;
+				for(GpsSatellite sat: gpsit){
+					numsat++;
+				}
+				satellites.setValue(numsat);
+				notifyListeners();
+			}
+			
+		}
+		
+	};
+	
 	@Override
 	protected void _enable() {
 		
 		Log.d("GPS", "ENABLING GPS");
-
-		locationListener = new LocationListener() {
-			public void onLocationChanged(Location loc) {
-				
-				longitude.setValue(loc.getLongitude());
-				latitude.setValue(loc.getLatitude());
-				altitude.setValue(loc.getAltitude());
-				accuracy.setValue(loc.getAccuracy());
-				bearing.setValue(loc.getBearing());
-				speed.setValue(loc.getSpeed());
-				timeMillis = loc.getTime();
-				
-				Geocoder myLocation = new Geocoder(getContext().getApplicationContext(), Locale.getDefault());
-				List<Address> list = null;
-				try {
-					list = myLocation.getFromLocation(loc.getLatitude(), loc.getLongitude(), 1);
-					if (list != null && list.size() > 0) {
-						Address location = list.get(0);
-						String addressText = String.format("%s, %s, %s",
-								location.getMaxAddressLineIndex() > 0 ? location.getAddressLine(0) : "",
-										location.getLocality(), // location.getAdminArea(), 
-										location.getCountryName());
-						address.setValue(addressText);
-					}
-					else
-						address.setValue("n/a");
-				} catch (IOException e) {
-					StringWriter sw = new StringWriter();
-					PrintWriter pw = new PrintWriter(sw);
-					e.printStackTrace(pw);
-					Log.d(SensorRegistry.TAG, sw.toString());
-				}
-
-				notifyListeners();
-			}
-
-			public void onStatusChanged(String provider, int status,
-					Bundle extras) {
-			}
-
-			public void onProviderEnabled(String provider) {
-				Log.d("LocationSensor", provider
-						+ " enabled, listening for updates.");
-			}
-
-			public void onProviderDisabled(String provider) {
-				Log.d("LocationSensor", provider
-						+ " disabled, no more updates.");
-			}
-		};
-		
-		gpsStatusListener = new Listener() {
-			
-			@Override
-			public void onGpsStatusChanged(int event) {
-				if (event == GpsStatus.GPS_EVENT_SATELLITE_STATUS){
-					GpsStatus gpsstatus = locationManager.getGpsStatus(null);
-					Iterable<GpsSatellite> gpsit = gpsstatus.getSatellites();
-					int numsat = 0;
-					for(GpsSatellite sat: gpsit){
-						numsat++;
-					}
-					satellites.setValue(numsat);
-					notifyListeners();
-				}
-				
-			}
-		};
-
 		locationManager = ((LocationManager) getContext()
 				.getSystemService(Context.LOCATION_SERVICE));
 		locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, GPS_UPDATE_TIME_INTERVAL,

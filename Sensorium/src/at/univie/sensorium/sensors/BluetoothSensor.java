@@ -51,6 +51,24 @@ public class BluetoothSensor extends AbstractSensor {
 		sScannedDevices = new SensorValue(SensorValue.UNIT.LIST, SensorValue.TYPE.SCANNED_DEV);
 	}
 	
+	final BroadcastReceiver bluetoothStateChange = new BroadcastReceiver() {
+		@Override
+		public void onReceive(Context context, Intent intent) {
+			final String action = intent.getAction();
+			if(action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+				final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+				switch(state) {
+					case BluetoothAdapter.STATE_OFF:
+						handler.removeCallbacks(scanTask);
+						break;
+                	case BluetoothAdapter.STATE_ON:
+                		handler.postDelayed(scanTask, 0);
+                		break;
+				}
+			}
+		}
+	};
+	
 	private Runnable scanTask = new Runnable() {
 		@Override
 		public void run() {			
@@ -59,13 +77,15 @@ public class BluetoothSensor extends AbstractSensor {
 			bluetoothIntent = getContext().getApplicationContext().registerReceiver(bluetoothReceiver, filter);
 			bluetoothAdapter.startDiscovery();	        		
 			Log.d("scanTask", "restart bluetooth scanning");
-			
 			handler.postDelayed(this, scan_interval*1000);
 		}		
 	};
 	
 	@Override
 	protected void _enable() {
+		
+		IntentFilter filterState = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+		getContext().getApplicationContext().registerReceiver(bluetoothStateChange, filterState);
 		
 		bluetoothAdapter =  BluetoothAdapter.getDefaultAdapter();
 		
@@ -89,7 +109,7 @@ public class BluetoothSensor extends AbstractSensor {
 		if (bluetoothAdapter.isEnabled()){ // only when bluetooth is enabled can we discover devices			
 			bluetoothReceiver = new BroadcastReceiver() {
 				@Override
-				public void onReceive(Context context, Intent intent) {					
+				public void onReceive(Context context, Intent intent) {		
 					String action = intent.getAction();
 					if (BluetoothDevice.ACTION_FOUND.equals(action)) {
 						BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
@@ -124,6 +144,7 @@ public class BluetoothSensor extends AbstractSensor {
 	protected void _disable() {
 		if(bluetoothIntent != null)
 			getContext().getApplicationContext().unregisterReceiver(bluetoothReceiver);
+		getContext().getApplicationContext().unregisterReceiver(bluetoothStateChange);
 		handler.removeCallbacks(scanTask);
 		scannedDevices.clear();
 		sScannedDevices.setValue(scannedDevices);

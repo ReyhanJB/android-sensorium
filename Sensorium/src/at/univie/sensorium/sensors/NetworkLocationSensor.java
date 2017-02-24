@@ -36,7 +36,6 @@ import android.util.Log;
 public class NetworkLocationSensor extends AbstractSensor {
 
 	private LocationManager locationManager;
-	private LocationListener locationListener;
 
 	private SensorValue longitude;
 	private SensorValue latitude;
@@ -60,50 +59,52 @@ public class NetworkLocationSensor extends AbstractSensor {
 		speed = new SensorValue(SensorValue.UNIT.METERSPERSECOND, SensorValue.TYPE.VELOCITY);
 	}
 
+	private LocationListener locationListener = new LocationListener() {
+		public void onLocationChanged(Location loc) {
+			longitude.setValue(loc.getLongitude());
+			latitude.setValue(loc.getLatitude());
+			altitude.setValue(loc.getAltitude());
+			accuracy.setValue(loc.getAccuracy());
+			speed.setValue(loc.getSpeed());
+			timeMillis = loc.getTime();
+			
+			Geocoder myLocation = new Geocoder(getContext().getApplicationContext(), Locale.getDefault());
+			List<Address> list = null;
+			try {
+				list = myLocation.getFromLocation(loc.getLatitude(), loc.getLongitude(), 1);
+				if (list != null && list.size() > 0) {
+					Address location = list.get(0);
+					String addressText = String.format("%s, %s, %s",
+							location.getMaxAddressLineIndex() > 0 ? location.getAddressLine(0) : "",
+									location.getLocality(), // location.getAdminArea(), 
+									location.getCountryName());
+					address.setValue(addressText);
+				}
+				else
+					address.setValue("n/a");
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+							
+			notifyListeners();
+		}
+
+		public void onStatusChanged(String provider, int status, Bundle extras) {
+		}
+
+		public void onProviderEnabled(String provider) {
+			_enable();
+			Log.d("LocationSensor", provider + " enabled, listening for updates.");
+		}
+
+		public void onProviderDisabled(String provider) {
+			_disable();
+			Log.d("LocationSensor", provider + " disabled, no more updates.");
+		}
+	};
+	
 	@Override
 	protected void _enable() {
-
-		locationListener = new LocationListener() {
-			public void onLocationChanged(Location loc) {
-				longitude.setValue(loc.getLongitude());
-				latitude.setValue(loc.getLatitude());
-				altitude.setValue(loc.getAltitude());
-				accuracy.setValue(loc.getAccuracy());
-				speed.setValue(loc.getSpeed());
-				timeMillis = loc.getTime();
-				
-				Geocoder myLocation = new Geocoder(getContext().getApplicationContext(), Locale.getDefault());
-				List<Address> list = null;
-				try {
-					list = myLocation.getFromLocation(loc.getLatitude(), loc.getLongitude(), 1);
-					if (list != null && list.size() > 0) {
-						Address location = list.get(0);
-						String addressText = String.format("%s, %s, %s",
-								location.getMaxAddressLineIndex() > 0 ? location.getAddressLine(0) : "",
-										location.getLocality(), // location.getAdminArea(), 
-										location.getCountryName());
-						address.setValue(addressText);
-					}
-					else
-						address.setValue("n/a");
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-								
-				notifyListeners();
-			}
-
-			public void onStatusChanged(String provider, int status, Bundle extras) {
-			}
-
-			public void onProviderEnabled(String provider) {
-				Log.d("LocationSensor", provider + " enabled, listening for updates.");
-			}
-
-			public void onProviderDisabled(String provider) {
-				Log.d("LocationSensor", provider + " disabled, no more updates.");
-			}
-		};
 
 		locationManager = ((LocationManager) getContext().getSystemService(Context.LOCATION_SERVICE));
 		locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
